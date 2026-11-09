@@ -23,6 +23,16 @@ function getDb() {
   return cache.p;
 }
 
+/* traduz o erro de conexão em uma orientação clara */
+function diagnose(e) {
+  const m = String(e && e.message || e), raw = ' [detalhe: ' + m.slice(0, 160) + ']';
+  if (/bad auth|Authentication failed|auth/i.test(m)) return 'O Atlas recusou o usuário/senha da MONGODB_URI. Confira o usuário e a senha em Database Access; se a senha tiver símbolos (@ : / ? # %), troque por uma senha só com letras e números ou codifique-os na URI.' + raw;
+  if (/ENOTFOUND|querySrv|EBADNAME|ECONNREFUSED.*27017/i.test(m)) return 'O endereço do cluster na MONGODB_URI não foi encontrado. Copie de novo a string em Atlas → Connect → Drivers.' + raw;
+  if (/Invalid scheme|Invalid connection string|must begin with|URI/i.test(m)) return 'A MONGODB_URI está em formato inválido. Ela deve começar com mongodb+srv:// ou mongodb://, sem aspas, sem espaços e sem os sinais < >.' + raw;
+  if (/timed out|Server selection|ReplicaSetNoPrimary|ETIMEDOUT|SSL|TLS/i.test(m)) return 'O Atlas não respondeu: provavelmente o IP da Vercel não está liberado. No Atlas vá em Network Access → Add IP Address → "Allow access from anywhere" (0.0.0.0/0) e aguarde 1 minuto.' + raw;
+  return 'Não foi possível conectar ao MongoDB.' + raw;
+}
+
 const SEED = [
   { name: 'Mercantil', access: 'disponivel', color: '#0f4c81', installments: [6, 12, 18, 24, 36, 48], rules: ['É possível subir pré, dependendo do login.', 'Pelo nosso login, é possível reapresentar, cancelar e verificar status.', 'Trabalha com parcelas de 6 até 48 vezes.', 'As parcelas podem ser quebradas.'] },
   { name: 'C6', access: 'matriz', color: '#2b2b2b', installments: [18, 24, 36, 48, 60], rules: ['Somente a matriz possui acesso.', 'Trabalha com 18, 24, 36, 48 e 60 parcelas.'] },
@@ -595,7 +605,7 @@ app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 app.use('/api', wrap(async (req, res, next) => {
   try { db = await getDb(); }
-  catch (e) { throw e instanceof HttpError ? e : new HttpError(503, 'Não foi possível conectar ao MongoDB (' + String(e.message).slice(0, 140) + '). Confira MONGODB_URI e a liberação de IP (0.0.0.0/0) no Atlas.'); }
+  catch (e) { throw e instanceof HttpError ? e : new HttpError(503, diagnose(e)); }
   next();
 }));
 
